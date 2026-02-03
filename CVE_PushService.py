@@ -189,7 +189,12 @@ def send_notification(vuln_info, template: str, delaytime: int):
     if delaytime > 0:
         logger.info(f"等待 {delaytime} 秒后发送通知...")
         time.sleep(delaytime)
-
+    try:
+        # 调用你 pkg.utils 里的 translate 函数
+        translated_desc = translate(vuln_info['description'], 3)
+    except Exception as e:
+        logger.warning(f"翻译失败，使用原英文描述: {str(e)}")
+        translated_desc = vuln_info['description']
     # 填充你原有的模板逻辑
     try:
         message = template.format(
@@ -261,5 +266,6 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+
 
 

@@ -69,6 +69,14 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 1. 强制拉取远程最新代码，解决由于你在网页端改代码导致的落后问题
+          # 使用 --autostash 会自动处理掉本地已修改的 vulns.db
+          git pull --rebase --autostash origin main
+          
+          # 2. 将脚本新生成的数据库变动添加到暂存区
           git add vulns.db
-          git pull --rebase origin main  # 关键：先拉取远程冲突，再合并
+          
+          # 3. 只有在确实有变动时才提交并推送
+          # [skip ci] 很关键，防止 Actions 递归触发
           git diff --staged --quiet || (git commit -m "Update vulnerability database [skip ci]" && git push)

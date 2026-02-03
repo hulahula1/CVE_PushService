@@ -14,6 +14,7 @@ from serverchan_sdk import sc_send
 
 # 基本配置
 SCKEY = os.getenv("SCKEY")
+DINGTALK_TOKEN = os.getenv("DINGTALK_TOKEN")
 DB_PATH = 'vulns.db'  # 数据库文件路径
 LOG_FILE = 'cveflows.log'  # 日志文件前缀
 CVSS_THRESHOLD = 7.0  # 只关注CVSS>=7.0的高危漏洞
@@ -157,33 +158,63 @@ def save_vuln(vuln_info):
         pass
     finally:
         conn.close()
-
+def send_to_dingtalk(title, markdown_content):
+    """
+    专门处理钉钉机器人推送，支持安全工程师偏好的 Markdown 格式
+    """
+    if not DINGTALK_TOKEN:
+        logger.warning("未检测到 DINGTALK_TOKEN，跳过钉钉推送。")
+        return
+    
+    url = f"https://oapi.dingtalk.com/robot/send?access_token={DINGTALK_TOKEN}"
+    headers = {"Content-Type": "application/json"}
+    
+    # 消息体：必须包含你在钉钉后台设置的“关键字”（如 CVE）
+    payload = {
+        "msgtype": "markdown",
+        "markdown": {
+            "title": title,
+            "text": f"### {title}\n\n{markdown_content}"
+        }
+    }
+    
+    try:
+        res = requests.post(url, data=json.dumps(payload), headers=headers, timeout=15)
+        logger.info(f"钉钉响应结果: {res.text}")
+    except Exception as e:
+        logger.error(f"钉钉接口请求异常: {str(e)}")
 # 通过Server酱发送通知
 def send_notification(vuln_info, template: str, delaytime: int):
-
     if delaytime > 0:
-        logger.info(f"Wait {delaytime} seconds before sending the notification. ...")
+        logger.info(f"等待 {delaytime} 秒后发送通知...")
         time.sleep(delaytime)
 
-
-    message = template.format(
-        cve_id=vuln_info['id'],
-        cvss_score=vuln_info['cvss_score'],
-        published_date=vuln_info['published_date'],
-        vector_string=vuln_info['vector_string'],
-        description=translate(vuln_info['description'], 3),
-        url=vuln_info['refs'],
-        source=vuln_info['source']
-    )
-
-    title = f"高危漏洞: {vuln_info['id']} ({vuln_info['cvss_score']})"
-
+    # 填充你原有的模板逻辑
     try:
-        response = sc_send(SCKEY, title, message, {"tags": "🚨漏洞警报"})
-        logger.info(f"Notification sent for {vuln_info['id']}, response: {response}")
+        message = template.format(
+            cve_id=vuln_info['id'],
+            cvss_score=vuln_info['cvss_score'],
+            published_date=vuln_info['published_date'],
+            vector_string=vuln_info['vector_string'],
+            description=translate(vuln_info['description'], 3), # 保持你原有的翻译逻辑
+            url=vuln_info['refs'],
+            source=vuln_info['source']
+        )
     except Exception as e:
-        logger.error(f"Failed to send notification: {str(e)}")
+        logger.error(f"模板解析失败: {str(e)}")
+        return
 
+    title = f"🚨 CVE 警报: {vuln_info['id']} (Score: {vuln_info['cvss_score']})"
+
+    # 通道 1: 原有的 Server酱
+    if SCKEY:
+        try:
+            sc_send(SCKEY, title, message, {"tags": "🚨漏洞警报"})
+        except Exception as e:
+            logger.error(f"ServerChan 发送失败: {str(e)}")
+
+    # 通道 2: 新增的钉钉
+    send_to_dingtalk(title, message)
 
 def main():
     logger.info("Starting CVE monitoring...")
@@ -229,3 +260,4 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+

@@ -39,6 +39,7 @@ jobs:
       - name: Run CVE Push Service script
         env:
           SCKEY: ${{ secrets.SCKEY }}   # 从 GitHub Secrets 注入
+          DINGTALK_TOKEN: ${{ secrets.DINGTALK_TOKEN }}
         run: |
           python CVE_PushService.py
 
